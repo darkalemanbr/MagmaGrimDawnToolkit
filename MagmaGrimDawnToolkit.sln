@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GDExplorer", "GDExplorer\GDExplorer.csproj", "{721832E2-3BC2-4B30-AEF8-FC2F85CEC9C9}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158} = {EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GDLib", "GDLib\GDLib.csproj", "{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GDLibTest", "GDLibTest\GDLibTest.csproj", "{E8CFD3C0-2576-44A1-A209-E06A2DAB9725}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158} = {EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{721832E2-3BC2-4B30-AEF8-FC2F85CEC9C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{721832E2-3BC2-4B30-AEF8-FC2F85CEC9C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{721832E2-3BC2-4B30-AEF8-FC2F85CEC9C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{721832E2-3BC2-4B30-AEF8-FC2F85CEC9C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EAFB9B05-FDFE-4C9E-9599-C2BC9315B158}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8CFD3C0-2576-44A1-A209-E06A2DAB9725}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8CFD3C0-2576-44A1-A209-E06A2DAB9725}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8CFD3C0-2576-44A1-A209-E06A2DAB9725}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8CFD3C0-2576-44A1-A209-E06A2DAB9725}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
