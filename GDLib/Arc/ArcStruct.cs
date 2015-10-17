@@ -28,7 +28,7 @@ namespace GDLib.Arc
             public static Header FromBytes(byte[] bytes)
             {
                 if (bytes.Length != HeaderSize)
-                    throw new ArgumentException(String.Format("The byte array must have length {0}.", HeaderSize), "bytes");
+                    throw new ArgumentException(string.Format("The byte array must have length {0}.", HeaderSize), "bytes");
 
                 var obj = new Header();
 
@@ -48,7 +48,7 @@ namespace GDLib.Arc
         public struct Entry
         {
             public uint StorageMode;
-            public uint DataOffset;
+            public uint DataPointer;
             public uint CompressedSize;
             public uint PlainSize;
             public uint Adler32;
@@ -61,14 +61,14 @@ namespace GDLib.Arc
             public static Entry FromBytes(byte[] bytes)
             {
                 if (bytes.Length != EntrySize)
-                    throw new ArgumentException(String.Format("The byte array must have length {0}.", EntrySize), "bytes");
+                    throw new ArgumentException(string.Format("The byte array must have length {0}.", EntrySize), "bytes");
 
                 var obj = new Entry();
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes)))
                 {
                     obj.StorageMode = reader.ReadUInt32();
-                    obj.DataOffset = reader.ReadUInt32();
+                    obj.DataPointer = reader.ReadUInt32();
                     obj.CompressedSize = reader.ReadUInt32();
                     obj.PlainSize = reader.ReadUInt32();
                     obj.Adler32 = reader.ReadUInt32();
@@ -93,7 +93,7 @@ namespace GDLib.Arc
             public static Chunk FromBytes(byte[] bytes)
             {
                 if (bytes.Length != ChunkSize)
-                    throw new ArgumentException(String.Format("The byte array must have length {0}.", ChunkSize), "bytes");
+                    throw new ArgumentException(string.Format("The byte array must have length {0}.", ChunkSize), "bytes");
 
                 var obj = new Chunk();
 

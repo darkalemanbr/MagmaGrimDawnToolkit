@@ -16,7 +16,7 @@ namespace GDLibTest
             var assembly = Assembly.Load("GDLib");
             Assert.IsNotNull(assembly);
 
-            _structClass = assembly.GetType("GDLib.ArcStruct");
+            _structClass = assembly.GetType("GDLib.Arc.ArcStruct");
             Assert.IsNotNull(_structClass);
         }
 

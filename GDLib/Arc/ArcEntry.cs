@@ -5,25 +5,27 @@ namespace GDLib.Arc
 {
     public class ArcEntry
     {
-        internal Arc _ParentArc;
-        internal ArcStruct.Entry _EntryStruct;
-        internal string _EntryPath;
-        internal DateTime _LastWrite;
+        internal Arc ParentArc;
+        internal ArcStruct.Entry EntryStruct;
+        internal string EntryPath;
+        internal DateTime LastWrite;
+        internal bool ShouldDelete;
 
-        public Arc Parent { get { return _ParentArc; } }
-        public string Path { get { return _EntryPath; } }
-        public ArcStorageMode StorageMode { get { return (ArcStorageMode)_EntryStruct.StorageMode; } }
-        public long CompressedSize { get { return _EntryStruct.CompressedSize; } }
-        public long PlainSize { get { return _EntryStruct.PlainSize; } }
-        public uint Adler32 { get { return _EntryStruct.Adler32; } }
-        public DateTime LastWriteTime { get { return _LastWrite; } }
+        public Arc Parent { get { return ParentArc; } }
+        public string Path { get { return EntryPath; } }
+        public StorageMode StorageMode { get { return (StorageMode)EntryStruct.StorageMode; } }
+        public long CompressedSize { get { return EntryStruct.CompressedSize; } }
+        public long PlainSize { get { return EntryStruct.PlainSize; } }
+        public uint Adler32 { get { return EntryStruct.Adler32; } }
+        public DateTime LastWriteTime { get { return LastWrite; } }
 
         internal ArcEntry(Arc parent, ArcStruct.Entry entryStruct, string entryPath)
         {
-            _ParentArc = parent;
-            _EntryStruct = entryStruct;
-            _EntryPath = entryPath;
-            _LastWrite = DateTime.FromFileTime((long)_EntryStruct.FileTime);
+            ParentArc = parent;
+            EntryStruct = entryStruct;
+            EntryPath = entryPath;
+            LastWrite = DateTime.FromFileTime((long)EntryStruct.FileTime);
+            ShouldDelete = false;
         }
     }
 }
