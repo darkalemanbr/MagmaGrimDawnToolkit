@@ -16,7 +16,7 @@ namespace GDLib.Arc
         public StorageMode StorageMode { get { return (StorageMode)EntryStruct.StorageMode; } }
         public long CompressedSize { get { return EntryStruct.CompressedSize; } }
         public long PlainSize { get { return EntryStruct.PlainSize; } }
-        public uint Adler32 { get { return EntryStruct.Adler32; } }
+        public int Adler32 { get { return EntryStruct.Adler32; } }
         public DateTime LastWriteTime { get { return LastWrite; } }
 
         internal ArcEntry(Arc parent, ArcStruct.Entry entryStruct, string entryPath)
@@ -24,7 +24,7 @@ namespace GDLib.Arc
             ParentArc = parent;
             EntryStruct = entryStruct;
             EntryPath = entryPath;
-            LastWrite = DateTime.FromFileTime((long)EntryStruct.FileTime);
+            LastWrite = DateTime.FromFileTime(EntryStruct.FileTime);
             ShouldDelete = false;
         }
     }

@@ -19,11 +19,11 @@ namespace GDLib.Arc
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Header
         {
-            public uint EntryCount;
-            public uint ChunkCount;
-            public uint ChunkIndexSize;
-            public uint PathIndexSize;
-            public uint FooterPointer;
+            public int EntryCount;
+            public int ChunkCount;
+            public int ChunkIndexSize;
+            public int PathIndexSize;
+            public int FooterPointer;
 
             public static Header FromBytes(byte[] bytes)
             {
@@ -33,11 +33,11 @@ namespace GDLib.Arc
                 var obj = new Header();
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes))) {
-                    obj.EntryCount = reader.ReadUInt32();
-                    obj.ChunkCount = reader.ReadUInt32();
-                    obj.ChunkIndexSize = reader.ReadUInt32();
-                    obj.PathIndexSize = reader.ReadUInt32();
-                    obj.FooterPointer = reader.ReadUInt32();
+                    obj.EntryCount = reader.ReadInt32();
+                    obj.ChunkCount = reader.ReadInt32();
+                    obj.ChunkIndexSize = reader.ReadInt32();
+                    obj.PathIndexSize = reader.ReadInt32();
+                    obj.FooterPointer = reader.ReadInt32();
                 }
 
                 return obj;
@@ -47,16 +47,16 @@ namespace GDLib.Arc
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Entry
         {
-            public uint StorageMode;
-            public uint DataPointer;
-            public uint CompressedSize;
-            public uint PlainSize;
-            public uint Adler32;
-            public ulong FileTime;
-            public uint ChunkCount;
-            public uint ChunkOffset;
-            public uint PathLength;
-            public uint PathOffset;
+            public int StorageMode;
+            public int DataPointer;
+            public int CompressedSize;
+            public int PlainSize;
+            public int Adler32;
+            public long FileTime;
+            public int ChunkCount;
+            public int ChunkOffset;
+            public int PathLength;
+            public int PathOffset;
 
             public static Entry FromBytes(byte[] bytes)
             {
@@ -67,16 +67,16 @@ namespace GDLib.Arc
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes)))
                 {
-                    obj.StorageMode = reader.ReadUInt32();
-                    obj.DataPointer = reader.ReadUInt32();
-                    obj.CompressedSize = reader.ReadUInt32();
-                    obj.PlainSize = reader.ReadUInt32();
-                    obj.Adler32 = reader.ReadUInt32();
-                    obj.FileTime = reader.ReadUInt64();
-                    obj.ChunkCount = reader.ReadUInt32();
-                    obj.ChunkOffset = reader.ReadUInt32();
-                    obj.PathLength = reader.ReadUInt32();
-                    obj.PathOffset = reader.ReadUInt32();
+                    obj.StorageMode = reader.ReadInt32();
+                    obj.DataPointer = reader.ReadInt32();
+                    obj.CompressedSize = reader.ReadInt32();
+                    obj.PlainSize = reader.ReadInt32();
+                    obj.Adler32 = reader.ReadInt32();
+                    obj.FileTime = reader.ReadInt64();
+                    obj.ChunkCount = reader.ReadInt32();
+                    obj.ChunkOffset = reader.ReadInt32();
+                    obj.PathLength = reader.ReadInt32();
+                    obj.PathOffset = reader.ReadInt32();
                 }
 
                 return obj;
@@ -86,9 +86,9 @@ namespace GDLib.Arc
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Chunk
         {
-            public uint DataOffset;
-            public uint CompressedSize;
-            public uint PlainSize;
+            public int DataPointer;
+            public int CompressedSize;
+            public int PlainSize;
 
             public static Chunk FromBytes(byte[] bytes)
             {
@@ -99,9 +99,9 @@ namespace GDLib.Arc
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes)))
                 {
-                    obj.DataOffset = reader.ReadUInt32();
-                    obj.CompressedSize = reader.ReadUInt32();
-                    obj.PlainSize = reader.ReadUInt32();
+                    obj.DataPointer = reader.ReadInt32();
+                    obj.CompressedSize = reader.ReadInt32();
+                    obj.PlainSize = reader.ReadInt32();
                 }
 
                 return obj;

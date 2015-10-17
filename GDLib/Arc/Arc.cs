@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Runtime.InteropServices;
 using Nuclex.Support.Cloning;
+using GDLib.Utils.Lz4;
 
 namespace GDLib.Arc
 {
@@ -18,9 +19,9 @@ namespace GDLib.Arc
         private ArcStruct.Header _header;
         private List<ArcEntry> _entries;
         private ReadOnlyCollection<ArcEntry> _entriesReadOnly;
-        private uint _chunkIndexPointer;
-        private uint _pathIndexPointer;
-        private uint _entryIndexPointer;
+        private int _chunkIndexPointer;
+        private int _pathIndexPointer;
+        private int _entryIndexPointer;
         #endregion
 
         #region Public Properties
@@ -29,7 +30,26 @@ namespace GDLib.Arc
         #endregion
 
         #region Private Methods
+        private ArcStruct.Chunk[] GetEntryChunks(ArcEntry entry)
+        {
+            return GetChunks(entry.EntryStruct.ChunkOffset, entry.EntryStruct.ChunkCount);
+        }
 
+        private ArcStruct.Chunk[] GetChunks(long startOffset, int chunkCount)
+        {
+            // Check if we can even read those chunks
+            if (startOffset + (ArcStruct.HeaderSize * chunkCount) > _header.ChunkIndexSize)
+                throw new ArgumentOutOfRangeException("The requested chunks are out of the chunk index bounds.");
+
+            _stream.Seek(_chunkIndexPointer + startOffset, SeekOrigin.Begin);
+            var chunks = new ArcStruct.Chunk[chunkCount];
+            for (int i = 0; i < chunkCount; ++i)
+            {
+                chunks[i] = ArcStruct.Chunk.FromBytes(_reader.ReadBytes(ArcStruct.ChunkSize));
+            }
+
+            return chunks;
+        }
         #endregion
 
         #region Public Methods
@@ -55,17 +75,39 @@ namespace GDLib.Arc
                 // I have yet to see an entry with this type, but atom0s' code has it so I'll keep it...
                 case StorageMode.Plain:
                     _stream.Seek(entry.EntryStruct.DataPointer, SeekOrigin.Begin);
-                    return _reader.ReadBytes((int)entry.EntryStruct.PlainSize);
+                    return _reader.ReadBytes(entry.EntryStruct.PlainSize);
 
                 case StorageMode.Lz4Compressed:
-                    // TODO: IMPLEMENT
-                    break;
+                    {
+                        var plainDataOffset = 0;
+                        var plainData = new byte[entry.EntryStruct.PlainSize];
+
+                        foreach (var chunk in GetEntryChunks(entry))
+                        {
+                            // Read the compressed chunk of data from the file
+                            _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
+                            _reader.ReadBytes(chunk.CompressedSize);
+
+                            // Decompress it
+                            var decompressedChunk = new byte[chunk.PlainSize];
+                            Lz4.DecompressSafe(_reader.ReadBytes(chunk.CompressedSize), decompressedChunk, chunk.CompressedSize, chunk.PlainSize);
+
+                            // Append it
+                            Buffer.BlockCopy(decompressedChunk, 0, plainData, plainDataOffset, chunk.PlainSize);
+
+                            // Move the offset ahead
+                            plainDataOffset += chunk.PlainSize;
+
+                            // Explicitly allow the GC to collect it
+                            decompressedChunk = null;
+                        }
+
+                        return plainData;
+                    }
 
                 default:
                     throw new InvalidDataException("The entry has been stored using an unsupported mode.");
             }
-
-            return new byte[] { };
         }
 
         public void WriteChanges(CreatePolicy createPolicy = CreatePolicy.OverwriteStrayBlocks, DeletePolicy deletePolicy = DeletePolicy.Strip)
@@ -109,11 +151,11 @@ namespace GDLib.Arc
 
             _stream.Seek(0, SeekOrigin.Begin);
 
-            //if (_reader.ReadChars(4).ToString() != "ARC\0")
-            if (_reader.ReadUInt32() != 0x435241)
+            //if (_reader.ReadInt32() != 0x435241)
+            if (new string(_reader.ReadChars(4)) != "ARC\0")
                 throw new InvalidDataException("The magic number of the specified file is invalid.");
 
-            var version = _reader.ReadUInt32();
+            var version = _reader.ReadInt32();
             if (version != 3)
                 throw new InvalidDataException(String.Format("The version of the specified ARC file ({0}) is not supported.", version));
         }
@@ -127,13 +169,13 @@ namespace GDLib.Arc
             _pathIndexPointer = _chunkIndexPointer + _header.ChunkIndexSize;
             _entryIndexPointer = _pathIndexPointer + _header.PathIndexSize;
 
-            for (uint i = 0; i < _header.EntryCount; ++i)
+            for (int i = 0; i < _header.EntryCount; ++i)
             {
                 _stream.Seek(_entryIndexPointer + (i * ArcStruct.EntrySize), SeekOrigin.Begin);
                 var entryStruct = ArcStruct.Entry.FromBytes(_reader.ReadBytes(ArcStruct.EntrySize));
 
                 _stream.Seek(_pathIndexPointer + entryStruct.PathOffset, SeekOrigin.Begin);
-                var entryPath = new string(_reader.ReadChars((int)entryStruct.PathLength));
+                var entryPath = new string(_reader.ReadChars(entryStruct.PathLength));
 
                 _entries.Add(new ArcEntry(this, entryStruct, entryPath));
             }
