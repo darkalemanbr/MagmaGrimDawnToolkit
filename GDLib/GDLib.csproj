@@ -55,10 +55,12 @@
     <Compile Include="Utils\Nuclex.Support.Cloning\ReflectionCloner.cs" />
     <Compile Include="Utils\Nuclex.Support.Cloning\SerializationCloner.cs" />
     <Compile Include="CreateDeletePolicies.cs" />
+    <Compile Include="Utils\PathUtils.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Utils\Nuclex.Support.Cloning\LICENSE" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>set DIR_IN=$(SolutionDir)LZ4Lib\bin\$(Configuration)

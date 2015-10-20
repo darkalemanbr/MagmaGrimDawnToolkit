@@ -1,10 +1,11 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Text;
 using System.Runtime.InteropServices;
-using Nuclex.Support.Cloning;
+using System.Text;
+using System.Text.RegularExpressions;
+using GDLib.Utils;
 using GDLib.Utils.Lz4;
 
 namespace GDLib.Arc
@@ -14,11 +15,14 @@ namespace GDLib.Arc
         #region Private Fields
         private Stream _stream;
         private bool _leaveOpen;
+
         private BinaryReader _reader;
         private BinaryWriter _writer;
+
         private ArcStruct.Header _header;
         private List<ArcEntry> _entries;
         private ReadOnlyCollection<ArcEntry> _entriesReadOnly;
+
         private int _chunkIndexPointer;
         private int _pathIndexPointer;
         private int _entryIndexPointer;
@@ -30,6 +34,12 @@ namespace GDLib.Arc
         #endregion
 
         #region Private Methods
+        private void ThrowIfEntryNotOwned(ArcEntry entry)
+        {
+            if (!_entries.Contains(entry))
+                throw new ArgumentOutOfRangeException("entry", "This Arc instance doesn't own that entry.");
+        }
+
         private ArcStruct.Chunk[] GetEntryChunks(ArcEntry entry)
         {
             return GetChunks(entry.EntryStruct.ChunkOffset, entry.EntryStruct.ChunkCount);
@@ -53,6 +63,11 @@ namespace GDLib.Arc
         #endregion
 
         #region Public Methods
+        /// <summary>
+        /// Reads an entry in the archive and returns its data.
+        /// </summary>
+        /// <param name="entry">An entry owned by this archive.</param>
+        /// <returns>The data read.</returns>
         public byte[] ReadEntry(ArcEntry entry)
         {
             ThrowIfDisposed();
@@ -67,8 +82,7 @@ namespace GDLib.Arc
              * the corrupted data or not. Also, YOLO.
              */
 
-            if (!_entries.Contains(entry))
-                throw new ArgumentOutOfRangeException("entry", "This Arc instance doesn't own that entry.");
+            ThrowIfEntryNotOwned(entry);
 
             switch (entry.StorageMode)
             {
@@ -110,6 +124,46 @@ namespace GDLib.Arc
             }
         }
 
+        /// <summary>
+        /// Marks an entry to be deleted when <see cref="Arc.WriteChanges"/> is called.
+        /// </summary>
+        /// <param name="entry">An entry owned by this archive.</param>
+        public void DeleteEntry(ArcEntry entry)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfEntryNotOwned(entry);
+
+            entry.ShouldDelete = true;
+        }
+
+        /// <summary>
+        /// Marks an entry to be moved to a new location when <see cref="Arc.WriteChanges"/> is called.
+        /// </summary>
+        /// <param name="entry">An entry owned by this archive.</param>
+        /// <param name="newLocation">
+        /// The new path of the entry.
+        /// 
+        /// To be valid it must be:
+        /// - Absolute and canonical, like "/my/stored/file.ext" (file extension is not required)
+        /// - Contain only non-extended ASCII characters, except for these: [control characters] : * ? " < > |
+        /// </param>
+        /// <exception cref="ArgumentException">Throws if the new path is invalid.</exception>
+        public void MoveEntry(ArcEntry entry, string newLocation)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfEntryNotOwned(entry);
+
+            newLocation = newLocation.Trim();
+
+            if (!PathUtils.EntryAbsolutePathRegex.IsMatch(newLocation))
+                throw new ArgumentException("The specified path is invalid.", "newLocation");
+
+            if (newLocation != entry.Path)
+                entry.MoveTo = newLocation;
+        }
+
         public void WriteChanges(CreatePolicy createPolicy = CreatePolicy.OverwriteStrayBlocks, DeletePolicy deletePolicy = DeletePolicy.Strip)
         {
             ThrowIfDisposed();
@@ -138,8 +192,10 @@ namespace GDLib.Arc
 
             _stream = stream;
             _leaveOpen = leaveOpen;
+
             _reader = new BinaryReader(stream, Encoding.ASCII, true);
             if (_stream.CanWrite) _writer = new BinaryWriter(stream, Encoding.ASCII, true);
+
             _entries = new List<ArcEntry> { };
             _entriesReadOnly = _entries.AsReadOnly();
         }

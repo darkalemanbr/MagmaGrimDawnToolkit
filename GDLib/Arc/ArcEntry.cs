@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace GDLib.Arc
 {
@@ -10,6 +11,7 @@ namespace GDLib.Arc
         internal string EntryPath;
         internal DateTime LastWrite;
         internal bool ShouldDelete;
+        internal string MoveTo;
 
         public Arc Parent { get { return ParentArc; } }
         public string Path { get { return EntryPath; } }
@@ -25,7 +27,9 @@ namespace GDLib.Arc
             EntryStruct = entryStruct;
             EntryPath = entryPath;
             LastWrite = DateTime.FromFileTime(EntryStruct.FileTime);
+
             ShouldDelete = false;
+            MoveTo = String.Empty;
         }
     }
 }
