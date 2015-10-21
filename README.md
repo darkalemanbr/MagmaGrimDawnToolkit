@@ -1,4 +1,5 @@
-# MAGMA Grim Dawn Toolkit
+MAGMA Grim Dawn Toolkit
+=======================
 
-Development status: active
-Usable: no
+**Development status:** active  
+**Usable:** no
