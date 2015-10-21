@@ -4,15 +4,12 @@ using System.Runtime.InteropServices;
 using System.Reflection;
 using GDLib.Arc;
 
-namespace GDLibTest
-{
+namespace GDLibTest {
     [TestClass]
-    public class StructSize
-    {
+    public class StructSize {
         Type _structClass;
 
-        public StructSize()
-        {
+        public StructSize() {
             var assembly = Assembly.Load("GDLib");
             Assert.IsNotNull(assembly);
 
@@ -21,8 +18,7 @@ namespace GDLibTest
         }
 
         [TestMethod]
-        public void HeaderSize()
-        {
+        public void HeaderSize() {
             var headerStruct = _structClass.GetNestedType("Header");
             Assert.IsNotNull(headerStruct);
 
@@ -30,8 +26,7 @@ namespace GDLibTest
         }
 
         [TestMethod]
-        public void EntrySize()
-        {
+        public void EntrySize() {
             var entryStruct = _structClass.GetNestedType("Entry");
             Assert.IsNotNull(entryStruct);
 
@@ -39,8 +34,7 @@ namespace GDLibTest
         }
 
         [TestMethod]
-        public void ChunkSize()
-        {
+        public void ChunkSize() {
             var chunkStruct = _structClass.GetNestedType("Chunk");
             Assert.IsNotNull(chunkStruct);
 

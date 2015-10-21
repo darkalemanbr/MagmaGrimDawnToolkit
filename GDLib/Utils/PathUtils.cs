@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 
-namespace GDLib.Utils
-{
-    public static class PathUtils
-    {
+namespace GDLib.Utils {
+    public static class PathUtils {
         /// <summary>
         /// Matches an absolute path that's valid for an entry.
         /// </summary>
@@ -20,8 +18,7 @@ namespace GDLib.Utils
         /// </summary>
         public static Regex SimplePathValidationRegex;
 
-        static PathUtils()
-        {
+        static PathUtils() {
             EntryAbsolutePathRegex = new Regex(@"
                 ^
                 (?!$)

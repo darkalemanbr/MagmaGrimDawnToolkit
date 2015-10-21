@@ -42,6 +42,7 @@
   <ItemGroup>
     <Compile Include="Arc\Arc.cs" />
     <Compile Include="Arc\ArcEntry.cs" />
+    <Compile Include="Arc\DataBlock.cs" />
     <Compile Include="Arc\StorageMode.cs" />
     <Compile Include="Arc\ArcStruct.cs" />
     <Compile Include="Arz\Arz.cs" />
@@ -54,7 +55,7 @@
     <Compile Include="Utils\Nuclex.Support.Cloning\ICloneFactory.cs" />
     <Compile Include="Utils\Nuclex.Support.Cloning\ReflectionCloner.cs" />
     <Compile Include="Utils\Nuclex.Support.Cloning\SerializationCloner.cs" />
-    <Compile Include="CreateDeletePolicies.cs" />
+    <Compile Include="Arc\CreateDeletePolicies.cs" />
     <Compile Include="Utils\PathUtils.cs" />
   </ItemGroup>
   <ItemGroup>
