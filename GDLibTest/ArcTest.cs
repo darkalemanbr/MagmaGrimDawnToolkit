@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using GDLib.Arc;
 using System.IO;
 using System.Diagnostics;
+using System.Linq;
 
 namespace GDLibTest {
     /// <summary>
@@ -105,13 +106,30 @@ namespace GDLibTest {
                 Assert.IsTrue(entry.Path == @"/new/location.ext");
 
                 questsArc.DeleteEntry(entry);
+
+                try {
+                    var shouldThrowCauseDisposed = entry.PlainSize;
+
+                    Assert.Fail();
+                }
+                catch (ObjectDisposedException e)
+                { }
+
+                var entry2 = questsArc.CreateEntry(@"/porn.stash", data, StorageMode.Lz4Compressed);
+                Assert.IsTrue(entry2.Adler32 == sum);
+
                 finalEntryCount = questsArc.Entries.Count;
-                Assert.IsTrue(finalEntryCount == initialEntryCount - 1);
+                Assert.IsTrue(finalEntryCount == initialEntryCount);
             }
 
             // Reopen the file to see if it's still valid
             using (var questsArc = new Arc(new FileStream(testArcPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))) {
                 Assert.IsTrue(questsArc.Entries.Count == finalEntryCount);
+
+                var entry = questsArc.Entries[0];
+
+                var data = questsArc.ReadEntry(entry);
+                Assert.IsTrue(Arc.Checksum(data) == entry.Adler32);
             }
         }
 

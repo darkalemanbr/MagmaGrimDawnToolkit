@@ -3,17 +3,14 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using GDLib.Utils;
 using GDLib.Utils.Lz4;
 
 namespace GDLib.Arc {
     public class Arc : IDisposable {
         private const int DEFAULT_MAX_ALLOC = 256 * 1024 * 1024;
-
-        private const uint ADLER32 = 65521;
+        private const uint ADLER32_MODULO = 65521;
 
         #region Private Fields
         private readonly object _lock = new object();
@@ -50,6 +47,9 @@ namespace GDLib.Arc {
 
         #region Private Methods
         private void UpdateMeta(uint footerStart) {
+            if (footerStart > _stream.Length)
+                throw new ArgumentOutOfRangeException("Cannot seek past the end of the stream.");
+
             uint chunkCount = 0;
             uint pathIndexSize = 0;
 
@@ -67,6 +67,7 @@ namespace GDLib.Arc {
                 }
             }
 
+            // Write all paths
             foreach (var entry in _entries) {
                 entry.EntryStruct.PathOffset = pathIndexSize;
                 entry.EntryStruct.PathLength = (uint)entry.EntryPath.Length;
@@ -76,9 +77,13 @@ namespace GDLib.Arc {
                 pathIndexSize += (uint)(entry.EntryPath.Length + 1);
             }
 
+            // Write all entry structs
             foreach (var entry in _entries) {
                 _writer.Write(entry.EntryStruct.ToBytesLE());
             }
+
+            // Truncate file at the current position
+            _stream.SetLength(_stream.Position + 1);
 
             _header.EntryCount = (uint)_entries.Count;
             _header.ChunkCount = chunkCount;
@@ -88,6 +93,10 @@ namespace GDLib.Arc {
 
             _stream.Seek(8, SeekOrigin.Begin);
             _writer.Write(_header.ToBytesLE());
+
+            _chunkIndexPointer = _header.FooterPointer;
+            _pathIndexPointer = _chunkIndexPointer + _header.ChunkIndexSize;
+            _entryIndexPointer = _pathIndexPointer + _header.PathIndexSize;
         }
 
         private void MoveData(uint frm, uint len, uint to) {
@@ -160,16 +169,12 @@ namespace GDLib.Arc {
                 throw new ArgumentOutOfRangeException("entry", "This Arc instance doesn't own that entry.");
         }
 
-        private ArcStruct.Chunk[] GetEntryChunks(ArcEntry entry) {
-            return GetChunks(entry.EntryStruct.ChunkOffset, entry.EntryStruct.ChunkCount);
-        }
-
         private ArcStruct.Chunk[] GetChunks(uint startOffset, uint chunkCount) {
             // Check if we can even read those chunks
             if (startOffset + (ArcStruct.ChunkSize * chunkCount) > _header.ChunkIndexSize)
                 throw new ArgumentOutOfRangeException("The requested chunks are out of the chunk index bounds.");
 
-            _stream.Seek(_chunkIndexPointer + startOffset, SeekOrigin.Begin);
+            _stream.Seek(_chunkIndexPointer + (startOffset * ArcStruct.ChunkSize), SeekOrigin.Begin);
             var chunks = new ArcStruct.Chunk[chunkCount];
             for (int i = 0; i < chunkCount; ++i) {
                 chunks[i] = ArcStruct.Chunk.FromBytesLE(_reader.ReadBytes(ArcStruct.ChunkSize));
@@ -246,64 +251,28 @@ namespace GDLib.Arc {
 
                 if (entry.EntryStruct.CompressedSize > 0) {
                     // Step 1: strip entry data
-                    foreach (var chunk in entry.Chunks) {
-                        var untouched = false;
+                    var frm = entry.EntryStruct.DataPointer + entry.EntryStruct.CompressedSize;
+                    var len = (int)_stream.Length - frm;
+                    MoveData(frm, (uint)len, entry.EntryStruct.DataPointer);
 
-                        // Check if the current chunk is not owned by any other entry
-                        foreach (var otherEntry in _entries) {
-                            if (ReferenceEquals(otherEntry, entry))
-                                continue;
-
-                            foreach (var otherChunk in otherEntry.Chunks) {
-                                if (Equals(otherChunk.DataPointer, chunk.DataPointer)) {
-                                    untouched = true;
-                                    break;
-                                }
-                            }
-
-                            if (untouched)
-                                break;
-                        }
-
-                        // If so, leave it alone
-                        if (untouched)
-                            continue;
-
-                        var frm = chunk.DataPointer + chunk.CompressedSize;
-                        var len = (int)_stream.Length - frm;
-                        MoveData(frm, (uint)len, chunk.DataPointer);
-
-                        totalStripped += chunk.CompressedSize;
-                    }
-
-                    /* OBSOLETE
-                    // Strip chunks from the index
-                    if (entry.EntryStruct.ChunkCount > 0) {
-                        var frm = _entryIndexPointer +
-                            entry.EntryStruct.ChunkOffset +
-                            (entry.EntryStruct.ChunkCount * ArcStruct.ChunkSize);
-                        var len = (int)_stream.Length - frm;
-                        MoveData(frm, len, _entryIndexPointer + entry.EntryStruct.ChunkOffset);
-                    }
-                    */
+                    totalStripped += entry.EntryStruct.CompressedSize;
 
                     // Step 2: update all remaining entries
-                    for (int i = 0; i < _entries.Count; ++i) {
-                        if (ReferenceEquals(_entries[i], entry))
-                            continue;
+                    if (totalStripped > 0) {
+                        foreach (var rEntry in _entries) {
+                            if (ReferenceEquals(rEntry, entry))
+                                continue;
 
-                        if (totalStripped > 0) {
-                            if (_entries[i].Chunks.Length > 0) {
-                                for (int c = 0; c < _entries[i].Chunks.Length; ++c) {
-                                    if (_entries[i].Chunks[c].DataPointer > _entries[i].Chunks[c].DataPointer) {
-                                        _entries[i].Chunks[c].DataPointer -= totalStripped;
-                                    }
+                            if (rEntry.Chunks.Length > 0) {
+                                for (uint i = 0; i < rEntry.Chunks.Length; ++i) {
+                                    if (rEntry.Chunks[i].DataPointer > entry.EntryStruct.DataPointer)
+                                        rEntry.Chunks[i].DataPointer -= totalStripped;
                                 }
 
-                                _entries[i].EntryStruct.DataPointer = _entries[i].Chunks[0].DataPointer;
+                                rEntry.EntryStruct.DataPointer = rEntry.Chunks[0].DataPointer;
                             }
                             else
-                                _entries[i].EntryStruct.DataPointer -= totalStripped;
+                                rEntry.EntryStruct.DataPointer -= totalStripped;
                         }
                     }
                 }
@@ -313,14 +282,6 @@ namespace GDLib.Arc {
 
                 // Step 3: write updated metadata to the archive
                 UpdateMeta(_header.FooterPointer - totalStripped);
-
-                // Step 4: trim unused bytes at the end of the file
-                _stream.SetLength(
-                    _header.FooterPointer +
-                    _header.ChunkIndexSize +
-                    _header.PathIndexSize +
-                    (_header.EntryCount * ArcStruct.EntrySize)
-                );
             }
         }
 
@@ -335,6 +296,7 @@ namespace GDLib.Arc {
         /// - Absolute and canonical like "/my/stored/file.ext" (file extension is not required)
         /// - Contain only non-extended ASCII characters, except for these: [control characters] : * ? " < > |
         /// </param>
+        /// <exception cref="ArgumentNullException">The new path is <see cref="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException">The specified entry is not owned by this archive.</exception>
         /// <exception cref="ArgumentException">The new path is invalid.</exception>
         public void MoveEntry(ArcEntry entry, string newPath) {
@@ -342,6 +304,9 @@ namespace GDLib.Arc {
                 ThrowIfDisposed();
                 ThrowIfReadOnly();
                 ThrowIfEntryNotOwned(entry);
+
+                if (newPath == null)
+                    throw new ArgumentNullException("New path cannot be null.", "newPath");
 
                 newPath = newPath.Trim();
 
@@ -359,21 +324,24 @@ namespace GDLib.Arc {
         /// </summary>
         /// <param name="data">The data to be hashed.</param>
         /// <returns>The Adler32 checksum of the provided data.</returns>
+        /// <remarks>Locks the data object.</remarks>
         public static uint Checksum(byte[] data) {
-            if (data == null)
-                return 1;
+            lock (data) {
+                if (data == null)
+                    return 1;
 
-            uint adler = 1; // 1 & 0xffff
-            uint sum2 = 0; // (1 >> 16) & 0xffff
+                uint adler = 1; // 1 & 0xffff
+                uint sum2 = 0; // (1 >> 16) & 0xffff
 
-            uint len = (uint)data.Length;
+                uint len = (uint)data.Length;
 
-            for (int i = 0; len > 0; ++i, --len) {
-                adler = (adler + data[i]) % ADLER32;
-                sum2 = (sum2 + adler) % ADLER32;
+                for (int i = 0; len > 0; ++i, --len) {
+                    adler = (adler + data[i]) % ADLER32_MODULO;
+                    sum2 = (sum2 + adler) % ADLER32_MODULO;
+                }
+
+                return adler | (sum2 << 16);
             }
-
-            return adler | (sum2 << 16);
         }
 
         /// <summary>
@@ -384,9 +352,71 @@ namespace GDLib.Arc {
         /// <param name="storageMode">
         /// If storageMode is not StorageMode.Plain, data will be compressed accordingly.
         /// </param>
+        /// <exception cref="ArgumentNullException">path or data are <see cref="null"/>.</exception>
+        /// <exception cref="ArgumentException">
+        /// The specified path is invalid or the specified storage mode is not supported.
+        /// </exception>
         /// <returns>The <see cref="ArcEntry"/> instance of the new entry.</returns>
+        /// <remarks>Locks the data object.</remarks>
         public ArcEntry CreateEntry(string path, byte[] data, StorageMode storageMode) {
-            throw new NotImplementedException();
+            lock (data)
+            lock (_lock) {
+                    ThrowIfDisposed();
+                    ThrowIfReadOnly();
+
+                    if (path == null)
+                        throw new ArgumentNullException("Path cannot be null.", "path");
+
+                    if (!PathUtils.EntryAbsolutePathRegex.IsMatch(path))
+                        throw new ArgumentException("The specified path is invalid.", "path");
+
+                    if (data == null)
+                        throw new ArgumentNullException("Data cannot be null.", "data");
+
+                    if (!Enum.IsDefined(typeof(StorageMode), storageMode))
+                        throw new ArgumentException("The specified storage mode is not supported.", "storageMode");
+
+                    byte[] writeData = data;
+
+                    if (storageMode == StorageMode.Lz4Compressed) {
+                        writeData = new byte[Lz4.CompressBound(data.Length)];
+                        var cSize = Lz4.CompressDefault(data, writeData, data.Length, writeData.Length);
+                        Array.Resize(ref writeData, cSize);
+                    }
+
+                    _stream.Seek(_header.FooterPointer, SeekOrigin.Begin);
+
+                    var chunk = new ArcStruct.Chunk() {
+                        DataPointer = (uint)_stream.Position,
+                        CompressedSize = (uint)writeData.Length,
+                        PlainSize = (uint)data.Length
+                    };
+
+                    _writer.Write(writeData);
+
+                    writeData = null;
+
+                    var entry = new ArcEntry(
+                        this,
+                        new ArcStruct.Entry() {
+                            StorageMode = (uint)storageMode,
+                            DataPointer = chunk.DataPointer,
+                            CompressedSize = chunk.CompressedSize,
+                            PlainSize = chunk.PlainSize,
+                            Adler32 = Checksum(data),
+                            FileTime = DateTime.Now.ToFileTime()
+                            // The other fields will be set by UpdateMeta()
+                        },
+                        path,
+                        new ArcStruct.Chunk[] { chunk }
+                    );
+
+                    _entries.Add(entry);
+
+                    UpdateMeta((uint)_stream.Position);
+
+                    return entry;
+                }
         }
         #endregion
 
@@ -541,6 +571,10 @@ namespace GDLib.Arc {
                     if (disposing) {
                         // TODO: dispose managed state (managed objects).
 
+                        foreach (var entry in _entries) {
+                            entry.Dispose(this);
+                        }
+                        
                         if (_writer != null)
                             _writer.Dispose();
                         if (_reader != null)

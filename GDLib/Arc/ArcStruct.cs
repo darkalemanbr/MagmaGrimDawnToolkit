@@ -8,42 +8,6 @@ namespace GDLib.Arc {
         public static readonly int EntrySize;
         public static readonly int ChunkSize;
 
-        private static byte[] GetBytesLE(int value) {
-            var bytes = BitConverter.GetBytes(value);
-
-            if (!BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
-
-            return bytes;
-        }
-
-        private static byte[] GetBytesLE(long value) {
-            var bytes = BitConverter.GetBytes(value);
-
-            if (!BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
-
-            return bytes;
-        }
-
-        private static byte[] GetBytesLE(uint value) {
-            var bytes = BitConverter.GetBytes(value);
-
-            if (!BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
-
-            return bytes;
-        }
-
-        private static byte[] GetBytesLE(ulong value) {
-            var bytes = BitConverter.GetBytes(value);
-
-            if (!BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
-
-            return bytes;
-        }
-
         static ArcStruct() {
             HeaderSize = Marshal.SizeOf<Header>();
             EntrySize = Marshal.SizeOf<Entry>();
@@ -76,15 +40,15 @@ namespace GDLib.Arc {
             }
 
             public byte[] ToBytesLE() {
-                var bytes = new byte[HeaderSize];
+                using (var writer = new BinaryWriter(new MemoryStream(HeaderSize))) {
+                    writer.Write(EntryCount);
+                    writer.Write(ChunkCount);
+                    writer.Write(ChunkIndexSize);
+                    writer.Write(PathIndexSize);
+                    writer.Write(FooterPointer);
 
-                Buffer.BlockCopy(GetBytesLE(EntryCount), 0, bytes, 0, 4);
-                Buffer.BlockCopy(GetBytesLE(ChunkCount), 0, bytes, 4, 4);
-                Buffer.BlockCopy(GetBytesLE(ChunkIndexSize), 0, bytes, 8, 4);
-                Buffer.BlockCopy(GetBytesLE(PathIndexSize), 0, bytes, 12, 4);
-                Buffer.BlockCopy(GetBytesLE(FooterPointer), 0, bytes, 16, 4);
-
-                return bytes;
+                    return ((MemoryStream)writer.BaseStream).GetBuffer();
+                }
             }
         }
 
@@ -124,20 +88,20 @@ namespace GDLib.Arc {
             }
 
             public byte[] ToBytesLE() {
-                var bytes = new byte[EntrySize];
+                using (var writer = new BinaryWriter(new MemoryStream(EntrySize))) {
+                    writer.Write(StorageMode);
+                    writer.Write(DataPointer);
+                    writer.Write(CompressedSize);
+                    writer.Write(PlainSize);
+                    writer.Write(Adler32);
+                    writer.Write(FileTime);
+                    writer.Write(ChunkCount);
+                    writer.Write(ChunkOffset);
+                    writer.Write(PathLength);
+                    writer.Write(PathOffset);
 
-                Buffer.BlockCopy(GetBytesLE(StorageMode), 0, bytes, 0, 4);
-                Buffer.BlockCopy(GetBytesLE(DataPointer), 0, bytes, 4, 4);
-                Buffer.BlockCopy(GetBytesLE(CompressedSize), 0, bytes, 8, 4);
-                Buffer.BlockCopy(GetBytesLE(PlainSize), 0, bytes, 12, 4);
-                Buffer.BlockCopy(GetBytesLE(Adler32), 0, bytes, 16, 4);
-                Buffer.BlockCopy(GetBytesLE(FileTime), 0, bytes, 20, 4);
-                Buffer.BlockCopy(GetBytesLE(ChunkCount), 0, bytes, 28, 4);
-                Buffer.BlockCopy(GetBytesLE(ChunkOffset), 0, bytes, 32, 4);
-                Buffer.BlockCopy(GetBytesLE(PathLength), 0, bytes, 36, 4);
-                Buffer.BlockCopy(GetBytesLE(PathOffset), 0, bytes, 40, 4);
-
-                return bytes;
+                    return ((MemoryStream)writer.BaseStream).GetBuffer();
+                }
             }
         }
 
@@ -163,13 +127,13 @@ namespace GDLib.Arc {
             }
 
             public byte[] ToBytesLE() {
-                var bytes = new byte[ChunkSize];
+                using (var writer = new BinaryWriter(new MemoryStream(ChunkSize))) {
+                    writer.Write(DataPointer);
+                    writer.Write(CompressedSize);
+                    writer.Write(PlainSize);
 
-                Buffer.BlockCopy(GetBytesLE(DataPointer), 0, bytes, 0, 4);
-                Buffer.BlockCopy(GetBytesLE(CompressedSize), 0, bytes, 4, 4);
-                Buffer.BlockCopy(GetBytesLE(PlainSize), 0, bytes, 8, 4);
-
-                return bytes;
+                    return ((MemoryStream)writer.BaseStream).GetBuffer();
+                }
             }
         }
     }
