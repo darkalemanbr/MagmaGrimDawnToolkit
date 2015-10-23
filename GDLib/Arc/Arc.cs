@@ -14,6 +14,8 @@ namespace GDLib.Arc {
         private const int DEFAULT_MAX_ALLOC = 256 * 1024 * 1024;
 
         #region Private Fields
+        private readonly object _lock = new object();
+
         private Stream _stream;
         private bool _leaveOpen;
 
@@ -36,7 +38,11 @@ namespace GDLib.Arc {
         public ReadOnlyCollection<ArcEntry> Entries { get { return _entriesReadOnly; } }
         public int MaxAlloc {
             get { return _maxAlloc; }
-            set { _maxAlloc = value; }
+            set {
+                lock (_lock) {
+                    _maxAlloc = value;
+                }
+            }
         }
         #endregion
 
@@ -178,55 +184,58 @@ namespace GDLib.Arc {
         /// <param name="entry">An entry owned by this archive.</param>
         /// <returns>The data read.</returns>
         /// <exception cref="ArgumentOutOfRangeException">The specified entry is not owned by this archive.</exception>
+        /// <exception cref="InvalidDataException">The entry has been stored using an unsupported mode.</exception>
         public byte[] ReadEntry(ArcEntry entry) {
-            ThrowIfDisposed();
-            ThrowIfEntryNotOwned(entry);
+            lock (_lock) {
+                ThrowIfDisposed();
+                ThrowIfEntryNotOwned(entry);
 
-            /*
-             * Addendum -- Checking for corrupted data
-             * 
-             * I have decided to delegate the burden of checking if the data is really corrupted to the
-             * applications using this library. The ArcEntry class provides the Adler32 checksum stored
-             * in the ARC file and the Arc class provides a Checksum() method for that very reason.
-             * Why? Because I believe the users should have the freedom to decide whether they want to accept
-             * the corrupted data or not. Also, YOLO.
-             */
+                /*
+                 * Addendum -- Checking for corrupted data
+                 * 
+                 * I have decided to delegate the burden of checking if the data is really corrupted to the
+                 * applications using this library. The ArcEntry class provides the Adler32 checksum stored
+                 * in the ARC file and the Arc class provides a Checksum() method for that very reason.
+                 * Why? Because I believe the users should have the freedom to decide whether they want to accept
+                 * the corrupted data or not. Also, YOLO.
+                 */
 
-            switch (entry.StorageMode) {
-                // I have yet to see an entry with this type, but atom0s' code has it so I'll keep it...
-                case StorageMode.Plain:
-                    _stream.Seek(entry.EntryStruct.DataPointer, SeekOrigin.Begin);
-                    return _reader.ReadBytes((int)entry.EntryStruct.PlainSize);
+                switch (entry.StorageMode) {
+                    // I have yet to see an entry with this type, but atom0s' code has it so I'll keep it...
+                    case StorageMode.Plain:
+                        _stream.Seek(entry.EntryStruct.DataPointer, SeekOrigin.Begin);
+                        return _reader.ReadBytes((int)entry.EntryStruct.PlainSize);
 
-                case StorageMode.Lz4Compressed:
-                    {
-                        uint plainDataOffset = 0;
-                        var plainData = new byte[entry.EntryStruct.PlainSize];
+                    case StorageMode.Lz4Compressed:
+                        {
+                            uint plainDataOffset = 0;
+                            var plainData = new byte[entry.EntryStruct.PlainSize];
 
-                        foreach (var chunk in entry.Chunks) {
-                            // Read the compressed chunk of data from the file
-                            _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
-                            _reader.ReadBytes((int)chunk.CompressedSize);
+                            foreach (var chunk in entry.Chunks) {
+                                // Read the compressed chunk of data from the file
+                                _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
+                                _reader.ReadBytes((int)chunk.CompressedSize);
 
-                            // Decompress it
-                            var decompressedChunk = new byte[chunk.PlainSize];
-                            Lz4.DecompressSafe(_reader.ReadBytes((int)chunk.CompressedSize), decompressedChunk, (int)chunk.CompressedSize, (int)chunk.PlainSize);
+                                // Decompress it
+                                var decompressedChunk = new byte[chunk.PlainSize];
+                                Lz4.DecompressSafe(_reader.ReadBytes((int)chunk.CompressedSize), decompressedChunk, (int)chunk.CompressedSize, (int)chunk.PlainSize);
 
-                            // Append it
-                            Buffer.BlockCopy(decompressedChunk, 0, plainData, (int)plainDataOffset, (int)chunk.PlainSize);
+                                // Append it
+                                Buffer.BlockCopy(decompressedChunk, 0, plainData, (int)plainDataOffset, (int)chunk.PlainSize);
 
-                            // Move the offset ahead
-                            plainDataOffset += chunk.PlainSize;
+                                // Move the offset ahead
+                                plainDataOffset += chunk.PlainSize;
 
-                            // Explicitly allow the GC to collect it
-                            decompressedChunk = null;
+                                // Explicitly allow the GC to collect it
+                                decompressedChunk = null;
+                            }
+
+                            return plainData;
                         }
 
-                        return plainData;
-                    }
-
-                default:
-                    throw new InvalidDataException("The entry has been stored using an unsupported mode.");
+                    default:
+                        throw new InvalidDataException("The entry has been stored using an unsupported mode.");
+                }
             }
         }
 
@@ -236,89 +245,91 @@ namespace GDLib.Arc {
         /// <param name="entry">An entry owned by this archive.</param>
         /// <exception cref="ArgumentOutOfRangeException">The specified entry is not owned by this archive.</exception>
         public void DeleteEntry(ArcEntry entry) {
-            ThrowIfDisposed();
-            ThrowIfReadOnly();
-            ThrowIfEntryNotOwned(entry);
+            lock (_lock) {
+                ThrowIfDisposed();
+                ThrowIfReadOnly();
+                ThrowIfEntryNotOwned(entry);
 
-            uint totalStripped = 0;
+                uint totalStripped = 0;
 
-            if (entry.EntryStruct.CompressedSize > 0) {
-                // Step 1: strip entry data
-                foreach (var chunk in entry.Chunks) {
-                    var untouched = false;
+                if (entry.EntryStruct.CompressedSize > 0) {
+                    // Step 1: strip entry data
+                    foreach (var chunk in entry.Chunks) {
+                        var untouched = false;
 
-                    // Check if the current chunk is not owned by any other entry
-                    foreach (var otherEntry in _entries) {
-                        if (ReferenceEquals(otherEntry, entry))
-                            continue;
+                        // Check if the current chunk is not owned by any other entry
+                        foreach (var otherEntry in _entries) {
+                            if (ReferenceEquals(otherEntry, entry))
+                                continue;
 
-                        foreach (var otherChunk in otherEntry.Chunks) {
-                            if (Equals(otherChunk.DataPointer, chunk.DataPointer)) {
-                                untouched = true;
-                                break;
-                            }
-                        }
-
-                        if (untouched)
-                            break;
-                    }
-
-                    // If so, leave it alone
-                    if (untouched)
-                        continue;
-
-                    var frm = chunk.DataPointer + chunk.CompressedSize;
-                    var len = (int)_stream.Length - frm;
-                    MoveData(frm, (uint)len, chunk.DataPointer);
-
-                    totalStripped += chunk.CompressedSize;
-                }
-
-                /* OBSOLETE
-                // Strip chunks from the index
-                if (entry.EntryStruct.ChunkCount > 0) {
-                    var frm = _entryIndexPointer +
-                        entry.EntryStruct.ChunkOffset +
-                        (entry.EntryStruct.ChunkCount * ArcStruct.ChunkSize);
-                    var len = (int)_stream.Length - frm;
-                    MoveData(frm, len, _entryIndexPointer + entry.EntryStruct.ChunkOffset);
-                }
-                */
-
-                // Step 2: update all remaining entries
-                for (int i = 0; i < _entries.Count; ++i) {
-                    if (ReferenceEquals(_entries[i], entry))
-                        continue;
-
-                    if (totalStripped > 0) {
-                        if (_entries[i].Chunks.Length > 0) {
-                            for (int c = 0; c < _entries[i].Chunks.Length; ++c) {
-                                if (_entries[i].Chunks[c].DataPointer > _entries[i].Chunks[c].DataPointer) {
-                                    _entries[i].Chunks[c].DataPointer -= totalStripped;
+                            foreach (var otherChunk in otherEntry.Chunks) {
+                                if (Equals(otherChunk.DataPointer, chunk.DataPointer)) {
+                                    untouched = true;
+                                    break;
                                 }
                             }
 
-                            _entries[i].EntryStruct.DataPointer = _entries[i].Chunks[0].DataPointer;
+                            if (untouched)
+                                break;
                         }
-                        else
-                            _entries[i].EntryStruct.DataPointer -= totalStripped;
+
+                        // If so, leave it alone
+                        if (untouched)
+                            continue;
+
+                        var frm = chunk.DataPointer + chunk.CompressedSize;
+                        var len = (int)_stream.Length - frm;
+                        MoveData(frm, (uint)len, chunk.DataPointer);
+
+                        totalStripped += chunk.CompressedSize;
+                    }
+
+                    /* OBSOLETE
+                    // Strip chunks from the index
+                    if (entry.EntryStruct.ChunkCount > 0) {
+                        var frm = _entryIndexPointer +
+                            entry.EntryStruct.ChunkOffset +
+                            (entry.EntryStruct.ChunkCount * ArcStruct.ChunkSize);
+                        var len = (int)_stream.Length - frm;
+                        MoveData(frm, len, _entryIndexPointer + entry.EntryStruct.ChunkOffset);
+                    }
+                    */
+
+                    // Step 2: update all remaining entries
+                    for (int i = 0; i < _entries.Count; ++i) {
+                        if (ReferenceEquals(_entries[i], entry))
+                            continue;
+
+                        if (totalStripped > 0) {
+                            if (_entries[i].Chunks.Length > 0) {
+                                for (int c = 0; c < _entries[i].Chunks.Length; ++c) {
+                                    if (_entries[i].Chunks[c].DataPointer > _entries[i].Chunks[c].DataPointer) {
+                                        _entries[i].Chunks[c].DataPointer -= totalStripped;
+                                    }
+                                }
+
+                                _entries[i].EntryStruct.DataPointer = _entries[i].Chunks[0].DataPointer;
+                            }
+                            else
+                                _entries[i].EntryStruct.DataPointer -= totalStripped;
+                        }
                     }
                 }
+
+                _entries.Remove(entry);
+                entry.Dispose(this);
+
+                // Step 3: write updated metadata to the archive
+                UpdateMeta(_header.FooterPointer - totalStripped);
+
+                // Step 4: trim unused bytes at the end of the file
+                _stream.SetLength(
+                    _header.FooterPointer +
+                    _header.ChunkIndexSize +
+                    _header.PathIndexSize +
+                    (_header.EntryCount * ArcStruct.EntrySize)
+                );
             }
-
-            _entries.Remove(entry);
-            entry.Dispose(this);
-
-            // Step 3: write updated metadata to the archive
-            UpdateMeta(_header.FooterPointer - totalStripped);
-
-            // Step 4: trim unused bytes at the end of the file
-            _stream.SetLength(
-                _header.FooterPointer +
-                _header.ChunkIndexSize +
-                _header.PathIndexSize +
-                (_header.EntryCount * ArcStruct.EntrySize)
-            );
         }
 
         /// <summary>
@@ -335,18 +346,20 @@ namespace GDLib.Arc {
         /// <exception cref="ArgumentOutOfRangeException">The specified entry is not owned by this archive.</exception>
         /// <exception cref="ArgumentException">The new path is invalid.</exception>
         public void MoveEntry(ArcEntry entry, string newPath) {
-            ThrowIfDisposed();
-            ThrowIfReadOnly();
-            ThrowIfEntryNotOwned(entry);
+            lock (_lock) {
+                ThrowIfDisposed();
+                ThrowIfReadOnly();
+                ThrowIfEntryNotOwned(entry);
 
-            newPath = newPath.Trim();
+                newPath = newPath.Trim();
 
-            if (!PathUtils.EntryAbsolutePathRegex.IsMatch(newPath))
-                throw new ArgumentException("The specified path is invalid.", "newLocation");
+                if (!PathUtils.EntryAbsolutePathRegex.IsMatch(newPath))
+                    throw new ArgumentException("The specified path is invalid.", "newLocation");
 
-            entry.EntryPath = newPath;
+                entry.EntryPath = newPath;
 
-            UpdateMeta(_header.FooterPointer);
+                UpdateMeta(_header.FooterPointer);
+            }
         }
 
         /// <summary>
@@ -453,57 +466,63 @@ namespace GDLib.Arc {
         }
 
         private void Init(Stream stream, bool leaveOpen, int maxAlloc) {
-            if (!stream.CanRead)
-                throw new NotSupportedException("The specified stream is not readable.");
+            lock (_lock) {
+                if (!stream.CanRead)
+                    throw new NotSupportedException("The specified stream is not readable.");
 
-            if (!stream.CanSeek)
-                throw new NotSupportedException("The specified stream is not seekable.");
+                if (!stream.CanSeek)
+                    throw new NotSupportedException("The specified stream is not seekable.");
 
-            _stream = stream;
-            _leaveOpen = leaveOpen;
-            _maxAlloc = maxAlloc;
+                _stream = stream;
+                _leaveOpen = leaveOpen;
+                _maxAlloc = maxAlloc;
 
-            _reader = new BinaryReader(stream, Encoding.ASCII, true);
-            if (_stream.CanWrite)
-                _writer = new BinaryWriter(stream, Encoding.ASCII, true);
+                _reader = new BinaryReader(stream, Encoding.ASCII, true);
+                if (_stream.CanWrite)
+                    _writer = new BinaryWriter(stream, Encoding.ASCII, true);
 
-            _entries = new List<ArcEntry> { };
-            _entriesReadOnly = _entries.AsReadOnly();
+                _entries = new List<ArcEntry> { };
+                _entriesReadOnly = _entries.AsReadOnly();
+            }
         }
 
         private void Validate() {
-            if (_stream.Length < 2048)
-                throw new InvalidDataException("The specified file has less than 2048 bytes.");
+            lock (_lock) {
+                if (_stream.Length < 2048)
+                    throw new InvalidDataException("The specified file has less than 2048 bytes.");
 
-            _stream.Seek(0, SeekOrigin.Begin);
+                _stream.Seek(0, SeekOrigin.Begin);
 
-            //if (_reader.ReadInt32() != 0x435241)
-            if (new string(_reader.ReadChars(4)) != "ARC\0")
-                throw new InvalidDataException("The magic number of the specified file is invalid.");
+                //if (_reader.ReadInt32() != 0x435241)
+                if (new string(_reader.ReadChars(4)) != "ARC\0")
+                    throw new InvalidDataException("The magic number of the specified file is invalid.");
 
-            var version = _reader.ReadInt32();
-            if (version != 3)
-                throw new InvalidDataException(String.Format("The version of the specified ARC file ({0}) is not supported.", version));
+                var version = _reader.ReadInt32();
+                if (version != 3)
+                    throw new InvalidDataException(String.Format("The version of the specified ARC file ({0}) is not supported.", version));
+            }
         }
 
         private void Parse() {
-            _stream.Seek(8, SeekOrigin.Begin);
-            _header = ArcStruct.Header.FromBytesLE(_reader.ReadBytes(ArcStruct.HeaderSize));
+            lock (_lock) {
+                _stream.Seek(8, SeekOrigin.Begin);
+                _header = ArcStruct.Header.FromBytesLE(_reader.ReadBytes(ArcStruct.HeaderSize));
 
-            _chunkIndexPointer = _header.FooterPointer;
-            _pathIndexPointer = _chunkIndexPointer + _header.ChunkIndexSize;
-            _entryIndexPointer = _pathIndexPointer + _header.PathIndexSize;
+                _chunkIndexPointer = _header.FooterPointer;
+                _pathIndexPointer = _chunkIndexPointer + _header.ChunkIndexSize;
+                _entryIndexPointer = _pathIndexPointer + _header.PathIndexSize;
 
-            for (int i = 0; i < _header.EntryCount; ++i) {
-                _stream.Seek(_entryIndexPointer + (i * ArcStruct.EntrySize), SeekOrigin.Begin);
-                var entryStruct = ArcStruct.Entry.FromBytesLE(_reader.ReadBytes(ArcStruct.EntrySize));
+                for (int i = 0; i < _header.EntryCount; ++i) {
+                    _stream.Seek(_entryIndexPointer + (i * ArcStruct.EntrySize), SeekOrigin.Begin);
+                    var entryStruct = ArcStruct.Entry.FromBytesLE(_reader.ReadBytes(ArcStruct.EntrySize));
 
-                _stream.Seek(_pathIndexPointer + entryStruct.PathOffset, SeekOrigin.Begin);
-                var entryPath = new string(_reader.ReadChars((int)entryStruct.PathLength));
+                    _stream.Seek(_pathIndexPointer + entryStruct.PathOffset, SeekOrigin.Begin);
+                    var entryPath = new string(_reader.ReadChars((int)entryStruct.PathLength));
 
-                _entries.Add(new ArcEntry(
-                    this, entryStruct, entryPath, GetChunks(entryStruct.ChunkOffset, entryStruct.ChunkCount
-                )));
+                    _entries.Add(new ArcEntry(
+                        this, entryStruct, entryPath, GetChunks(entryStruct.ChunkOffset, entryStruct.ChunkCount
+                    )));
+                }
             }
         }
         #endregion
@@ -512,26 +531,28 @@ namespace GDLib.Arc {
         private bool disposedValue = false; // To detect redundant calls
 
         protected virtual void Dispose(bool disposing) {
-            if (!disposedValue) {
-                if (disposing) {
-                    // TODO: dispose managed state (managed objects).
+            lock (_lock) {
+                if (!disposedValue) {
+                    if (disposing) {
+                        // TODO: dispose managed state (managed objects).
 
-                    if (_writer != null)
-                        _writer.Dispose();
-                    if (_reader != null)
-                        _reader.Dispose();
-                    if (!_leaveOpen && _stream != null)
-                        _stream.Dispose();
+                        if (_writer != null)
+                            _writer.Dispose();
+                        if (_reader != null)
+                            _reader.Dispose();
+                        if (!_leaveOpen && _stream != null)
+                            _stream.Dispose();
+                    }
+
+                    // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                    // TODO: set large fields to null.
+                    _stream = null;
+                    _reader = null;
+                    _writer = null;
+                    _entries = null;
+
+                    disposedValue = true;
                 }
-
-                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
-                // TODO: set large fields to null.
-                _stream = null;
-                _reader = null;
-                _writer = null;
-                _entries = null;
-
-                disposedValue = true;
             }
         }
 
