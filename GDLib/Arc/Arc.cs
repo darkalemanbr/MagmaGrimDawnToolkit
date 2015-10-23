@@ -13,6 +13,8 @@ namespace GDLib.Arc {
     public class Arc : IDisposable {
         private const int DEFAULT_MAX_ALLOC = 256 * 1024 * 1024;
 
+        private const uint ADLER32 = 65521;
+
         #region Private Fields
         private readonly object _lock = new object();
 
@@ -207,30 +209,20 @@ namespace GDLib.Arc {
                         return _reader.ReadBytes((int)entry.EntryStruct.PlainSize);
 
                     case StorageMode.Lz4Compressed:
-                        {
-                            uint plainDataOffset = 0;
-                            var plainData = new byte[entry.EntryStruct.PlainSize];
-
+                        using (var plainData = new MemoryStream(new byte[entry.PlainSize], 0, entry.PlainSize, true, true)) {
                             foreach (var chunk in entry.Chunks) {
                                 // Read the compressed chunk of data from the file
                                 _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
-                                _reader.ReadBytes((int)chunk.CompressedSize);
 
                                 // Decompress it
                                 var decompressedChunk = new byte[chunk.PlainSize];
                                 Lz4.DecompressSafe(_reader.ReadBytes((int)chunk.CompressedSize), decompressedChunk, (int)chunk.CompressedSize, (int)chunk.PlainSize);
+                                plainData.Write(decompressedChunk, (int)plainData.Position, (int)chunk.PlainSize);
 
-                                // Append it
-                                Buffer.BlockCopy(decompressedChunk, 0, plainData, (int)plainDataOffset, (int)chunk.PlainSize);
-
-                                // Move the offset ahead
-                                plainDataOffset += chunk.PlainSize;
-
-                                // Explicitly allow the GC to collect it
                                 decompressedChunk = null;
                             }
 
-                            return plainData;
+                            return plainData.GetBuffer();
                         }
 
                     default:
@@ -367,8 +359,21 @@ namespace GDLib.Arc {
         /// </summary>
         /// <param name="data">The data to be hashed.</param>
         /// <returns>The Adler32 checksum of the provided data.</returns>
-        public int Checksum(byte[] data) {
-            throw new NotImplementedException();
+        public static uint Checksum(byte[] data) {
+            if (data == null)
+                return 1;
+
+            uint adler = 1; // 1 & 0xffff
+            uint sum2 = 0; // (1 >> 16) & 0xffff
+
+            uint len = (uint)data.Length;
+
+            for (int i = 0; len > 0; ++i, --len) {
+                adler = (adler + data[i]) % ADLER32;
+                sum2 = (sum2 + adler) % ADLER32;
+            }
+
+            return adler | (sum2 << 16);
         }
 
         /// <summary>
@@ -520,8 +525,8 @@ namespace GDLib.Arc {
                     var entryPath = new string(_reader.ReadChars((int)entryStruct.PathLength));
 
                     _entries.Add(new ArcEntry(
-                        this, entryStruct, entryPath, GetChunks(entryStruct.ChunkOffset, entryStruct.ChunkCount
-                    )));
+                        this, entryStruct, entryPath, GetChunks(entryStruct.ChunkOffset, entryStruct.ChunkCount)
+                    ));
                 }
             }
         }

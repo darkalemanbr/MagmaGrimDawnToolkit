@@ -55,14 +55,14 @@ namespace GDLibTest {
         /// <summary>
         /// Finds the location where Grim Dawn is installed.
         /// </summary>
-        /// <returns>Returns the path when it's found and exists; <see cref="string.Empty"/> otherwise.</returns>
+        /// <returns>Returns the path when it's found and exists; <see cref="null"/> otherwise.</returns>
         internal static string FindGrimDawnInstallPath() {
             var regVal = Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 219990", "InstallLocation", null);
 
             if (regVal != null && Directory.Exists((string)regVal))
                 return (string)regVal;
             else
-                return "";
+                return null;
         }
 
         [TestMethod]
@@ -74,7 +74,7 @@ namespace GDLibTest {
 #endif
 
             // Pass the test if it can't find the install location
-            if (gdInstallPath == "")
+            if (gdInstallPath == null)
                 return;
 
             foreach (var file in Directory.GetFiles(Path.Combine(gdInstallPath, "resources"), "*.arc")) {

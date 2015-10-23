@@ -12,8 +12,26 @@ namespace GDLibTest {
     /// </summary>
     [TestClass]
     public class ArcTest {
-        public ArcTest() {
+        string questsPath;
 
+        public ArcTest() {
+            var gdPath = MiscTest.FindGrimDawnInstallPath();
+
+            if (gdPath == null)
+                return;
+
+            questsPath = Path.Combine(gdPath, @"resources\text_en.arc");
+        }
+
+        private string CopyArcFile() {
+            if (questsPath == null)
+                return null;
+
+            var path = Path.Combine(TestContext.DeploymentDirectory, "file.arc");
+
+            File.Copy(questsPath, path, true);
+
+            return path;
         }
 
         private TestContext testContextInstance;
@@ -55,45 +73,50 @@ namespace GDLibTest {
 
         [TestMethod]
         public void ExistingArc() {
-            var gdPath = MiscTest.FindGrimDawnInstallPath();
+            var testArcPath = CopyArcFile();
 
-            if (gdPath == "")
+            if (testArcPath == null)
                 return;
-
-            var arcPath = Path.Combine(TestContext.DeploymentDirectory, "Quests.arc");
-            File.Copy(Path.Combine(gdPath, @"resources\Quests.arc"), arcPath, true);
 
             int finalEntryCount;
 
-            using (var questsArc = new Arc(new FileStream(arcPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))) {
+            using (var questsArc = new Arc(new FileStream(testArcPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))) {
                 var initialEntryCount = questsArc.Entries.Count;
 
                 Assert.IsTrue(initialEntryCount > 0);
 #if DEBUG
                 Debug.WriteLine("Entry count: " + questsArc.Entries.Count, TestContext.TestName);
 #endif
-                var data = questsArc.ReadEntry(questsArc.Entries[0]);
-                Assert.IsTrue(data.Length == questsArc.Entries[0].PlainSize);
-#if DEBUG
-                Debug.WriteLine("First entry size: " + data.Length);
-                Debug.WriteLine("First entry path: " + questsArc.Entries[0].Path);
-#endif
-                questsArc.MoveEntry(questsArc.Entries[0], @"/new/location.ext");
-                Assert.IsTrue(questsArc.Entries[0].Path == @"/new/location.ext");
+                var entry = questsArc.Entries[0];
 
-                questsArc.DeleteEntry(questsArc.Entries[0]);
+                var data = questsArc.ReadEntry(entry);
+                Assert.IsTrue(data.Length == entry.PlainSize);
+#if DEBUG
+                Debug.WriteLine("Entry size: " + data.Length);
+                Debug.WriteLine("Entry path: " + entry.Path);
+#endif
+                var sum = Arc.Checksum(data);
+
+                Assert.IsTrue(sum == entry.Adler32);
+#if DEBUG
+                Debug.WriteLine("Entry checksum: " + entry.Adler32);
+#endif
+                questsArc.MoveEntry(entry, @"/new/location.ext");
+                Assert.IsTrue(entry.Path == @"/new/location.ext");
+
+                questsArc.DeleteEntry(entry);
                 finalEntryCount = questsArc.Entries.Count;
                 Assert.IsTrue(finalEntryCount == initialEntryCount - 1);
             }
 
             // Reopen the file to see if it's still valid
-            using (var questsArc = new Arc(new FileStream(arcPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))) {
+            using (var questsArc = new Arc(new FileStream(testArcPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))) {
                 Assert.IsTrue(questsArc.Entries.Count == finalEntryCount);
             }
         }
 
         [TestMethod]
-        public void NewArc() {
+        public void CreateNewArc() {
             var file = Path.Combine(Path.GetTempPath(), TestContext.TestName + ".arc");
 
             using (var newArc = Arc.New(file)) {

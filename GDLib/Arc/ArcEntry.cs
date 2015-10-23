@@ -109,6 +109,10 @@ namespace GDLib.Arc {
             // GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// DON'T USE!!! Disposing the object is not allowed.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Disposing the object is not allowed.</exception>
         public void Dispose() {
             throw new InvalidOperationException("Disposing the object is not allowed.");
         }
