@@ -26,6 +26,24 @@ namespace GDLib.Arc {
             return bytes;
         }
 
+        private static byte[] GetBytesLE(uint value) {
+            var bytes = BitConverter.GetBytes(value);
+
+            if (!BitConverter.IsLittleEndian)
+                Array.Reverse(bytes);
+
+            return bytes;
+        }
+
+        private static byte[] GetBytesLE(ulong value) {
+            var bytes = BitConverter.GetBytes(value);
+
+            if (!BitConverter.IsLittleEndian)
+                Array.Reverse(bytes);
+
+            return bytes;
+        }
+
         static ArcStruct() {
             HeaderSize = Marshal.SizeOf<Header>();
             EntrySize = Marshal.SizeOf<Entry>();
@@ -34,11 +52,11 @@ namespace GDLib.Arc {
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Header {
-            public int EntryCount;
-            public int ChunkCount;
-            public int ChunkIndexSize;
-            public int PathIndexSize;
-            public int FooterPointer;
+            public uint EntryCount;
+            public uint ChunkCount;
+            public uint ChunkIndexSize;
+            public uint PathIndexSize;
+            public uint FooterPointer;
 
             public static Header FromBytesLE(byte[] bytes) {
                 if (bytes.Length != HeaderSize)
@@ -47,11 +65,11 @@ namespace GDLib.Arc {
                 var obj = new Header();
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes))) {
-                    obj.EntryCount = reader.ReadInt32();
-                    obj.ChunkCount = reader.ReadInt32();
-                    obj.ChunkIndexSize = reader.ReadInt32();
-                    obj.PathIndexSize = reader.ReadInt32();
-                    obj.FooterPointer = reader.ReadInt32();
+                    obj.EntryCount = reader.ReadUInt32();
+                    obj.ChunkCount = reader.ReadUInt32();
+                    obj.ChunkIndexSize = reader.ReadUInt32();
+                    obj.PathIndexSize = reader.ReadUInt32();
+                    obj.FooterPointer = reader.ReadUInt32();
                 }
 
                 return obj;
@@ -72,16 +90,16 @@ namespace GDLib.Arc {
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Entry {
-            public int StorageMode;
-            public int DataPointer;
-            public int CompressedSize;
-            public int PlainSize;
-            public int Adler32;
+            public uint StorageMode;
+            public uint DataPointer;
+            public uint CompressedSize;
+            public uint PlainSize;
+            public uint Adler32;
             public long FileTime;
-            public int ChunkCount;
-            public int ChunkOffset;
-            public int PathLength;
-            public int PathOffset;
+            public uint ChunkCount;
+            public uint ChunkOffset;
+            public uint PathLength;
+            public uint PathOffset;
 
             public static Entry FromBytesLE(byte[] bytes) {
                 if (bytes.Length != EntrySize)
@@ -90,23 +108,23 @@ namespace GDLib.Arc {
                 var obj = new Entry();
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes))) {
-                    obj.StorageMode = reader.ReadInt32();
-                    obj.DataPointer = reader.ReadInt32();
-                    obj.CompressedSize = reader.ReadInt32();
-                    obj.PlainSize = reader.ReadInt32();
-                    obj.Adler32 = reader.ReadInt32();
+                    obj.StorageMode = reader.ReadUInt32();
+                    obj.DataPointer = reader.ReadUInt32();
+                    obj.CompressedSize = reader.ReadUInt32();
+                    obj.PlainSize = reader.ReadUInt32();
+                    obj.Adler32 = reader.ReadUInt32();
                     obj.FileTime = reader.ReadInt64();
-                    obj.ChunkCount = reader.ReadInt32();
-                    obj.ChunkOffset = reader.ReadInt32();
-                    obj.PathLength = reader.ReadInt32();
-                    obj.PathOffset = reader.ReadInt32();
+                    obj.ChunkCount = reader.ReadUInt32();
+                    obj.ChunkOffset = reader.ReadUInt32();
+                    obj.PathLength = reader.ReadUInt32();
+                    obj.PathOffset = reader.ReadUInt32();
                 }
 
                 return obj;
             }
 
             public byte[] ToBytesLE() {
-                var bytes = new byte[HeaderSize];
+                var bytes = new byte[EntrySize];
 
                 Buffer.BlockCopy(GetBytesLE(StorageMode), 0, bytes, 0, 4);
                 Buffer.BlockCopy(GetBytesLE(DataPointer), 0, bytes, 4, 4);
@@ -125,9 +143,9 @@ namespace GDLib.Arc {
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct Chunk {
-            public int DataPointer;
-            public int CompressedSize;
-            public int PlainSize;
+            public uint DataPointer;
+            public uint CompressedSize;
+            public uint PlainSize;
 
             public static Chunk FromBytesLE(byte[] bytes) {
                 if (bytes.Length != ChunkSize)
@@ -136,16 +154,16 @@ namespace GDLib.Arc {
                 var obj = new Chunk();
 
                 using (var reader = new BinaryReader(new MemoryStream(bytes))) {
-                    obj.DataPointer = reader.ReadInt32();
-                    obj.CompressedSize = reader.ReadInt32();
-                    obj.PlainSize = reader.ReadInt32();
+                    obj.DataPointer = reader.ReadUInt32();
+                    obj.CompressedSize = reader.ReadUInt32();
+                    obj.PlainSize = reader.ReadUInt32();
                 }
 
                 return obj;
             }
 
             public byte[] ToBytesLE() {
-                var bytes = new byte[HeaderSize];
+                var bytes = new byte[ChunkSize];
 
                 Buffer.BlockCopy(GetBytesLE(DataPointer), 0, bytes, 0, 4);
                 Buffer.BlockCopy(GetBytesLE(CompressedSize), 0, bytes, 4, 4);

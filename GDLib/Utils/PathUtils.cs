@@ -25,7 +25,7 @@ namespace GDLib.Utils {
                 (
                   [\/]
                   (?!\s)
-                  [ !#-)+-.0-9;=@A-Z\[\]^-{}~]++
+                  [ !#-)+-.0-9;=@A-Z\[\]^-{}~]+
                   (?<![\s.])
                 )+
                 $
@@ -35,21 +35,21 @@ namespace GDLib.Utils {
                 ^
                 (?!$)
                 (?<root>\.{0,2}[\\\/])?
-                [\\\/]*+
+                [\\\/]*
                 (?<nodes>
                   (?!\s)
                   (?<node>
                     \.{1,2}[\\\/]|
-                    [ !#-)+-.0-9;=@A-Z\[\]^-{}~]++
+                    [ !#-)+-.0-9;=@A-Z\[\]^-{}~]+
                     (?<![.\s])
-                    [\\\/]?+
+                    [\\\/]?
                   )
                   [\\\/]*
                 )*
                 $
             ", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnorePatternWhitespace);
 
-            SimplePathValidationRegex = new Regex(@"^[ !#-)+-9;=@A-Z\[-\]^-{}~]*+$",
+            SimplePathValidationRegex = new Regex(@"^[ !#-)+-9;=@A-Z\[-\]^-{}~]*$",
                 RegexOptions.Compiled | RegexOptions.Singleline);
         }
     }

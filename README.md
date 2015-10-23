@@ -2,4 +2,4 @@ MAGMA Grim Dawn Toolkit
 =======================
 
 **Development status:** active  
-**Usable:** no
+**Usable:** GDLib only
