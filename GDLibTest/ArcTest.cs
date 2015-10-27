@@ -112,7 +112,7 @@ namespace GDLibTest {
 
                     Assert.Fail();
                 }
-                catch (ObjectDisposedException e)
+                catch (ObjectDisposedException)
                 { }
 
                 var entry2 = questsArc.CreateEntry(@"/porn.stash", data, StorageMode.Lz4Compressed);

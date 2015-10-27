@@ -39,7 +39,7 @@ namespace GDLib.Arc {
             get { return _maxAlloc; }
             set {
                 lock (_lock) {
-                    _maxAlloc = value;
+                    _maxAlloc = Math.Max(value, 1);
                 }
             }
         }
@@ -313,7 +313,7 @@ namespace GDLib.Arc {
                 if (!PathUtils.EntryAbsolutePathRegex.IsMatch(newPath))
                     throw new ArgumentException("The specified path is invalid.", "newLocation");
 
-                entry.EntryPath = newPath;
+                entry.EntryPath = newPath.TrimStart('/');
 
                 UpdateMeta(_header.FooterPointer);
             }
@@ -502,6 +502,8 @@ namespace GDLib.Arc {
 
         private void Init(Stream stream, bool leaveOpen, int maxAlloc) {
             lock (_lock) {
+                maxAlloc = Math.Max(maxAlloc, 1);
+
                 if (!stream.CanRead)
                     throw new NotSupportedException("The specified stream is not readable.");
 
