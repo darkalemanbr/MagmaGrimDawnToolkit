@@ -58,7 +58,9 @@
   <ItemGroup>
     <None Include="Utils\Nuclex.Support.Cloning\LICENSE" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="LICENSE" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>set DIR_IN=$(SolutionDir)LZ4Lib\bin\$(Configuration)
