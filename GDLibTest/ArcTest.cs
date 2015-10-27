@@ -103,7 +103,7 @@ namespace GDLibTest {
                 Debug.WriteLine("Entry checksum: " + entry.Adler32);
 #endif
                 questsArc.MoveEntry(entry, @"/new/location.ext");
-                Assert.IsTrue(entry.Path == @"/new/location.ext");
+                Assert.IsTrue(entry.Path == @"new/location.ext");
 
                 questsArc.DeleteEntry(entry);
 
