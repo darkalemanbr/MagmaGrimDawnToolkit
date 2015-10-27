@@ -150,13 +150,11 @@ namespace GDLib.Arc {
             return hasFlag;
         }
 
+        // Adapted from 'http://stackoverflow.com/a/8828483/2969832'
         private bool EnumIsValueValid(Enum value) {
             var chr = value.ToString()[0];
 
-            if (char.IsDigit(chr) || chr == '-')
-                return false;
-
-            return true;
+            return !(char.IsDigit(chr) || chr == '-');
         }
 
         private void ThrowIfReadOnly() {

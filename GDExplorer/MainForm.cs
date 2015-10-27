@@ -83,6 +83,7 @@ namespace GDExplorer
             Text = W_TITLE;
         }
 
+        // Ported from 'http://tinyurl.com/pgsadpk'
         private TreeNode AddPathToTree(TreeNodeCollection nodes, string path) {
             var fname = Path.GetFileName(path);
 
