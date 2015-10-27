@@ -205,31 +205,37 @@ namespace GDLib.Arc {
                  * the corrupted data or not. Also, YOLO.
                  */
 
-                switch (entry.StorageMode) {
-                    // I have yet to see an entry with this type, but atom0s' code has it so I'll keep it...
-                    case StorageMode.Plain:
-                        _stream.Seek(entry.EntryStruct.DataPointer, SeekOrigin.Begin);
-                        return _reader.ReadBytes((int)entry.EntryStruct.PlainSize);
+                if (!Enum.IsDefined(typeof(StorageMode), entry.StorageMode))
+                    throw new InvalidDataException("The entry has been stored using an unsupported mode.");
 
-                    case StorageMode.Lz4Compressed:
-                        using (var plainData = new MemoryStream(new byte[entry.PlainSize], 0, entry.PlainSize, true, true)) {
-                            foreach (var chunk in entry.Chunks) {
-                                // Read the compressed chunk of data from the file
-                                _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
+                using (var plainData = new MemoryStream(new byte[entry.PlainSize], 0, entry.PlainSize, true, true)) {
+                    foreach (var chunk in entry.Chunks) {
+                        // Read the compressed chunk of data from the file
+                        _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
 
-                                // Decompress it
-                                var decompressedChunk = new byte[chunk.PlainSize];
-                                Lz4.DecompressSafe(_reader.ReadBytes((int)chunk.CompressedSize), decompressedChunk, (int)chunk.CompressedSize, (int)chunk.PlainSize);
-                                plainData.Write(decompressedChunk, (int)plainData.Position, (int)chunk.PlainSize);
-
-                                decompressedChunk = null;
-                            }
-
-                            return plainData.GetBuffer();
+                        if (entry.StorageMode == StorageMode.Plain) {
+                            plainData.Write(
+                                _reader.ReadBytes((int)chunk.PlainSize),
+                                (int)plainData.Position,
+                                (int)chunk.PlainSize
+                            );
                         }
+                        else if (entry.StorageMode == StorageMode.Lz4Compressed) {
+                            // Decompress it
+                            var decompressedChunk = new byte[chunk.PlainSize];
+                            Lz4.DecompressSafe(
+                                _reader.ReadBytes((int)chunk.CompressedSize),
+                                decompressedChunk, 
+                                (int)chunk.CompressedSize,
+                                (int)chunk.PlainSize
+                            );
+                            plainData.Write(decompressedChunk, (int)plainData.Position, (int)chunk.PlainSize);
 
-                    default:
-                        throw new InvalidDataException("The entry has been stored using an unsupported mode.");
+                            decompressedChunk = null;
+                        }
+                    }
+
+                    return plainData.GetBuffer();
                 }
             }
         }
@@ -533,8 +539,11 @@ namespace GDLib.Arc {
                     throw new InvalidDataException("The magic number of the specified file is invalid.");
 
                 var version = _reader.ReadInt32();
-                if (version != 3)
-                    throw new InvalidDataException(String.Format("The version of the specified ARC file ({0}) is not supported.", version));
+                if (version != 3) {
+                    throw new InvalidDataException(
+                        string.Format("The version of the specified ARC file ({0}) is not supported.", version)
+                    );
+                }
             }
         }
 
