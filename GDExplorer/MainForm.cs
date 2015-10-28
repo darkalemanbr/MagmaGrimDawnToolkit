@@ -26,9 +26,10 @@ namespace GDExplorer
         }
 
         private enum Action {
-            Ready,
+            Idle,
             Loading,
-            Writing
+            Writing,
+            Extracting
         }
 
         private const string W_TITLE = "GD Explorer";
@@ -50,7 +51,7 @@ namespace GDExplorer
 
             set {
                 switch (value) {
-                    case Action.Ready:
+                    case Action.Idle:
                         statusLabel.Text = "Ready";
                         break;
 
@@ -60,6 +61,10 @@ namespace GDExplorer
 
                     case Action.Writing:
                         statusLabel.Text = "Writing to file...";
+                        break;
+
+                    case Action.Extracting:
+                        statusLabel.Text = "Extracting file...";
                         break;
                 }
 
@@ -78,8 +83,9 @@ namespace GDExplorer
 
             _mode = Mode.None;
             _worker = new BackgroundWorker();
-            Status = Action.Ready;
+            Status = Action.Idle;
 
+            entryTree.TreeViewNodeSorter = new EntryTreeSorter();
             Text = W_TITLE;
         }
 
@@ -99,9 +105,8 @@ namespace GDExplorer
         }
 
         private void ChooseAndOpenFile(object sender, EventArgs e) {
-            var selected = openFile.ShowDialog();
-
-            if (selected != DialogResult.OK)
+            fileSelect.Title = "Open ARC file";
+            if (fileSelect.ShowDialog() != DialogResult.OK)
                 return;
 
             CloseFile();
@@ -110,8 +115,8 @@ namespace GDExplorer
 
             try {
                 _arc = new Arc(new FileStream(
-                    openFile.FileName,
-                    FileMode.Open, openFile.ReadOnlyChecked ? FileAccess.Read : FileAccess.ReadWrite,
+                    fileSelect.FileName,
+                    FileMode.Open, fileSelect.ReadOnlyChecked ? FileAccess.Read : FileAccess.ReadWrite,
                     FileShare.None
                 ), false, Properties.Settings.Default.MaxAlloc);
             }
@@ -125,24 +130,31 @@ namespace GDExplorer
                     string.Format(
                         exc is InvalidDataException ?
                             "The file \"{0}\" is not valid." : "The file \"{0}\" could not be opened."
-                        , openFile.FileName),
+                        , fileSelect.FileName),
                     "", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-                Status = Action.Ready;
 
                 return;
             }
+            finally {
+                Status = Action.Idle;
+            }
 
             _mode = Mode.Arc;
-            _openFilePath = openFile.FileName;
+            _openFilePath = fileSelect.FileName;
 
             _arc.Entries.All(x => {
                 AddPathToTree(entryTree.Nodes, x.Path);
                 return true;
             });
+            entryTree.Sort();
 
             Text = string.Format(W_TITLE_OPENED, Path.GetFileName(_openFilePath));
-            Status = Action.Ready;
+            closeToolStripMenuItem.Enabled = true;
+            extractSelectedToolStripMenuItem.Enabled = true;
+            extractAllToolStripMenuItem.Enabled = true;
+            renameToolStripMenuItem.Enabled = true;
+
+            Status = Action.Idle;
         }
 
         private void CloseFile() {
@@ -161,8 +173,12 @@ namespace GDExplorer
             }
 
             _openFilePath = null;
-            entryTree.Nodes.Clear();
             _mode = Mode.None;
+            entryTree.Nodes.Clear();
+            closeToolStripMenuItem.Enabled = false;
+            extractSelectedToolStripMenuItem.Enabled = false;
+            extractAllToolStripMenuItem.Enabled = false;
+            renameToolStripMenuItem.Enabled = false;
             Text = W_TITLE;
         }
 
@@ -170,8 +186,8 @@ namespace GDExplorer
             if (_arc == null)
                 return false;
 
-            oldPath = oldPath.Replace('\\', '/').Trim('/');
-            newPath = '/' + newPath.Replace('\\', '/');
+            oldPath = oldPath.Trim('/');
+            newPath = '/' + newPath;
 
             lock (_arc) {
                 Status = Action.Writing;
@@ -186,12 +202,13 @@ namespace GDExplorer
                     MessageBox.Show("An error has occurred while renaming the file.",
                         "", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-                    Status = Action.Ready;
-
                     return false;
                 }
+                finally {
+                    Status = Action.Idle;
+                }
 
-                Status = Action.Ready;
+                Status = Action.Idle;
             }
 
             return true;
@@ -201,7 +218,7 @@ namespace GDExplorer
             if (_arc == null)
                 return false;
 
-            folder = folder.Replace('\\', '/').Trim('/');
+            folder = folder.Trim('/');
 
             lock (_arc) {
                 Status = Action.Writing;
@@ -219,22 +236,116 @@ namespace GDExplorer
                     MessageBox.Show("An error has occurred while renaming the folder.",
                         "", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-                    Status = Action.Ready;
-
                     return false;
                 }
-
-                Status = Action.Ready;
+                finally {
+                    Status = Action.Idle;
+                }
             }
 
             return true;
+        }
+
+        private void ExtractSelected() {
+            if (entryTree.SelectedNode == null)
+                return;
+
+            folderSelect.Description = string.Format("Extract \"{0}\"", entryTree.SelectedNode.FullPath);
+            if (folderSelect.ShowDialog() != DialogResult.OK)
+                return;
+
+            var entries = _arc.Entries.Where(x =>
+                   x.Path == entryTree.SelectedNode.FullPath ||
+                   Path.GetDirectoryName(x.Path).Replace('\\', '/') == entryTree.SelectedNode.FullPath + '/'
+            ).ToArray();
+
+            foreach (var entry in entries) {
+                try {
+                    ExtractEntryTo(entry, folderSelect.SelectedPath, true);
+                }
+                catch (Exception exc) {
+#if DEBUG
+                    throw exc;
+#endif
+                    MessageBox.Show(
+                        string.Format(
+                            "An error occurred while extracting the entry \"{0}\"\nError message: {1}",
+                            entry.Path, exc.Message
+                        ), "", MessageBoxButtons.OK, MessageBoxIcon.Error
+                    );
+
+                    return;
+                }
+                finally {
+                    Status = Action.Idle;
+                }
+            }
+
+            Status = Action.Idle;
+        }
+
+        private void ExtractAll() {
+            folderSelect.Description = string.Format("Extract all in \"{0}\"", Path.GetFileName(_openFilePath));
+            if (folderSelect.ShowDialog() != DialogResult.OK)
+                return;
+
+            Status = Action.Extracting;
+
+            foreach (var entry in _arc.Entries) {
+                try {
+                    ExtractEntryTo(entry, folderSelect.SelectedPath, true);
+                }
+                catch (Exception exc) {
+#if DEBUG
+                    throw exc;
+#endif
+                    MessageBox.Show(
+                        string.Format(
+                            "An error occurred while extracting the entry \"{0}\"\nError message: {1}",
+                            entry.Path, exc.Message
+                        ), "", MessageBoxButtons.OK, MessageBoxIcon.Error
+                    );
+
+                    return;
+                }
+                finally {
+                    Status = Action.Idle;
+                }
+            }
+
+            Status = Action.Idle;
+        }
+
+        private void ExtractEntryTo(ArcEntry entry, string toPath, bool checksum) {
+            if (_arc == null)
+                return;
+
+            if (toPath == null)
+                throw new ArgumentNullException("toPath");
+
+            Directory.CreateDirectory(Path.Combine(toPath, Path.GetDirectoryName(entry.Path)));
+            toPath = Path.Combine(toPath, entry.Path);
+
+            lock (_arc) {
+                var data = _arc.ReadEntry(entry);
+
+                if (checksum && Arc.Checksum(data) != entry.Adler32)
+                    throw new InvalidDataException("Checksum failed: the data is probably corrupted.");
+
+                File.WriteAllBytes(toPath, data);
+            }
         }
 
         private void Exit(object sender, EventArgs e) {
             Close();
         }
 
-        private void Exit(object sender, FormClosingEventArgs e) {
+#region Control event handlers
+        private void MainForm_Closing(object sender, FormClosingEventArgs e) {
+            CloseFile();
+        }
+
+        private void closeToolStripMenuItem_Click(object sender, EventArgs e) {
             CloseFile();
         }
 
@@ -267,8 +378,14 @@ namespace GDExplorer
             }
         }
 
-        private void closeToolStripMenuItem_Click(object sender, EventArgs e) {
-            CloseFile();
+        private void extractSelectedToolStripMenuItem_Click(object sender, EventArgs e) {
+            ExtractSelected();
         }
+
+        private void extractAllToolStripMenuItem_Click(object sender, EventArgs e) {
+            ExtractAll();
+        }
+        #endregion
+
     }
 }
