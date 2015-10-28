@@ -208,17 +208,14 @@ namespace GDLib.Arc {
                 if (!Enum.IsDefined(typeof(StorageMode), entry.StorageMode))
                     throw new InvalidDataException("The entry has been stored using an unsupported mode.");
 
-                using (var plainData = new MemoryStream(new byte[entry.PlainSize], 0, entry.PlainSize, true, true)) {
+                using (var plainData = new MemoryStream((int)entry.EntryStruct.PlainSize)) {
                     foreach (var chunk in entry.Chunks) {
                         // Read the compressed chunk of data from the file
                         _stream.Seek(chunk.DataPointer, SeekOrigin.Begin);
 
                         if (entry.StorageMode == StorageMode.Plain) {
-                            plainData.Write(
-                                _reader.ReadBytes((int)chunk.PlainSize),
-                                (int)plainData.Position,
-                                (int)chunk.PlainSize
-                            );
+                            _reader.Read(plainData.GetBuffer(), (int)plainData.Position, (int)chunk.PlainSize);
+                            plainData.Position += chunk.PlainSize;
                         }
                         else if (entry.StorageMode == StorageMode.Lz4Compressed) {
                             // Decompress it
@@ -229,7 +226,7 @@ namespace GDLib.Arc {
                                 (int)chunk.CompressedSize,
                                 (int)chunk.PlainSize
                             );
-                            plainData.Write(decompressedChunk, (int)plainData.Position, (int)chunk.PlainSize);
+                            plainData.Write(decompressedChunk, 0, (int)chunk.PlainSize);
 
                             decompressedChunk = null;
                         }

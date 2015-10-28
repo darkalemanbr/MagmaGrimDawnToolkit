@@ -46,17 +46,7 @@
     <Compile Include="Arz\Arz.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utils\Lz4\Lz4.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ClonerHelpers.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ExpressionTreeCloner.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ExpressionTreeCloner.FieldBased.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ExpressionTreeCloner.PropertyBased.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ICloneFactory.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\ReflectionCloner.cs" />
-    <Compile Include="Utils\Nuclex.Support.Cloning\SerializationCloner.cs" />
     <Compile Include="Utils\PathUtils.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Utils\Nuclex.Support.Cloning\LICENSE" />
   </ItemGroup>
   <ItemGroup>
     <None Include="LICENSE" />
