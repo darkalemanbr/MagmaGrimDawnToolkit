@@ -199,7 +199,7 @@ namespace GDExplorer
 #if DEBUG
                     throw exc;
 #endif
-                    MessageBox.Show("An error has occurred while renaming the file.",
+                    MessageBox.Show("An error has occurred while renaming the entry.",
                         "", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
                     return false;
