@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
-using System.Configuration;
+using System.Resources;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using GDLib.Arc;
@@ -31,9 +31,6 @@ namespace GDExplorer
             Writing,
             Extracting
         }
-
-        private const string W_TITLE = "GD Explorer";
-        private const string W_TITLE_OPENED = "GD Explorer :: {0}";
 
         private static Regex _validNodeRegex;
 
@@ -86,7 +83,6 @@ namespace GDExplorer
             Status = Action.Idle;
 
             entryTree.TreeViewNodeSorter = new EntryTreeSorter();
-            Text = W_TITLE;
         }
 
         // Ported from 'http://tinyurl.com/pgsadpk'
@@ -148,7 +144,7 @@ namespace GDExplorer
             });
             entryTree.Sort();
 
-            Text = string.Format(W_TITLE_OPENED, Path.GetFileName(_openFilePath));
+            Text = string.Format(Properties.Resources.STR_FMT_TITLE_OPENED, Path.GetFileName(_openFilePath));
             closeToolStripMenuItem.Enabled = true;
             extractSelectedToolStripMenuItem.Enabled = true;
             extractAllToolStripMenuItem.Enabled = true;
@@ -179,7 +175,11 @@ namespace GDExplorer
             extractSelectedToolStripMenuItem.Enabled = false;
             extractAllToolStripMenuItem.Enabled = false;
             renameToolStripMenuItem.Enabled = false;
-            Text = W_TITLE;
+            entrySizeLabel.Text = "";
+            entryStorageLabel.Text = "";
+            entryFiletimeLabel.Text = "";
+            entryChecksumLabel.Text = "";
+            Text = Properties.Resources.STR_TITLE;
         }
 
         private bool RenameSingle(string oldPath, string newPath) {
@@ -384,6 +384,30 @@ namespace GDExplorer
 
         private void extractAllToolStripMenuItem_Click(object sender, EventArgs e) {
             ExtractAll();
+        }
+
+        private void entryTree_AfterSelect(object sender, TreeViewEventArgs e) {
+            if (_arc == null)
+                return;
+
+            try {
+                var entry = _arc.Entries.First(x => x.Path == e.Node.FullPath);
+
+                entrySizeLabel.Text = string.Format(
+                    entry.StorageMode == StorageMode.Plain ?
+                        Properties.Resources.STR_FMT_ENTRYSIZE : Properties.Resources.STR_FMT_ENTRYSIZE_COMPRESSED,
+                    entry.PlainSize, entry.CompressedSize
+                );
+                entryStorageLabel.Text = entry.StorageMode.ToString();
+                entryFiletimeLabel.Text = entry.LastWriteTime.ToString();
+                entryChecksumLabel.Text = "0x" + entry.Adler32.ToString("X");
+            }
+            catch {
+                entrySizeLabel.Text = "";
+                entryStorageLabel.Text = "";
+                entryFiletimeLabel.Text = "";
+                entryChecksumLabel.Text = "";
+            }
         }
         #endregion
 
